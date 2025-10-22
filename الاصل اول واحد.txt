@@ -1429,17 +1429,8 @@ class SmartMoneyAlgoProE5:
         self._trace("box.archive", "archive", timestamp=box.right, text=hist_text)
 
     def alertcondition(self, condition: bool, title: str, message: Optional[str] = None) -> None:
-        if condition:
-            timestamp = self.series.get_time(0)
-            text = title if message is None else f"{title} :: {message}"
-            self.alerts.append((timestamp, text))
-            self._trace(
-                "alertcondition",
-                "trigger",
-                timestamp=timestamp,
-                title=title,
-                alert_message=message,
-            )
+        """Alerts are disabled in this refactor."""
+        return
 
     def _eval_condition(
         self,
@@ -1519,62 +1510,12 @@ class SmartMoneyAlgoProE5:
         return metrics
 
     def _register_label_event(self, label: Label) -> None:
-        text = label.text.strip()
-        collapsed = text.replace(" ", "")
-        key: Optional[str] = None
-        if collapsed == "BOS":
-            key = "BOS"
-        elif collapsed == "BOS+":
-            key = "BOS_PLUS"
-        elif collapsed == self.CHOCH_TEXT.replace(" ", ""):
-            key = "CHOCH"
-        elif collapsed == "MSS+":
-            key = "MSS_PLUS"
-        elif collapsed == "MSS":
-            key = "MSS"
-        elif collapsed == self.IDM_TEXT.replace(" ", ""):
-            key = "IDM"
-        elif text.startswith(f"{self.BOS_TEXT} -"):
-            key = "FUTURE_BOS"
-        elif text.startswith(f"{self.CHOCH_TEXT} -"):
-            key = "FUTURE_CHOCH"
-        elif text == "X":
-            key = "X"
-        elif label.style == "label.style_circle":
-            if label.color == self.inputs.structure.bear:
-                key = "RED_CIRCLE"
-            elif label.color == self.inputs.structure.bull:
-                key = "GREEN_CIRCLE"
-        if key:
-            self.console_event_log[key] = {
-                "text": label.text,
-                "price": label.y,
-                "time": label.x,
-                "time_display": format_timestamp(label.x),
-                "display": f"{label.text} @ {format_price(label.y)}",
-            }
-            self._trace("label", "register", timestamp=label.x, key=key, text=label.text, price=label.y)
+        """Console event aggregation is disabled."""
+        return
 
     def _register_box_event(self, box: Box) -> None:
-        text = box.text.strip()
-        key = self._box_event_key(text)
-        if key:
-            self.console_event_log[key] = {
-                "text": box.text,
-                "price": (box.bottom, box.top),
-                "time": box.left,
-                "time_display": format_timestamp(box.left),
-                "display": f"{box.text} {format_price(box.bottom)} → {format_price(box.top)}",
-            }
-            self._trace(
-                "box",
-                "register",
-                timestamp=box.right,
-                key=key,
-                text=box.text,
-                top=box.top,
-                bottom=box.bottom,
-            )
+        """Console event aggregation is disabled."""
+        return
 
     def _box_event_key(self, text: str) -> Optional[str]:
         text = text.strip()
@@ -1616,107 +1557,8 @@ class SmartMoneyAlgoProE5:
         )
 
     def _collect_latest_console_events(self) -> Dict[str, Dict[str, Any]]:
-        events: Dict[str, Dict[str, Any]] = {key: value.copy() for key, value in self.console_event_log.items()}
-        for payload in events.values():
-            if "time" in payload and "time_display" not in payload:
-                payload["time_display"] = format_timestamp(payload.get("time"))
-
-        def record_label(
-            key: str,
-            predicate: Callable[[Label], bool],
-            formatter: Optional[Callable[[Label], str]] = None,
-        ) -> None:
-            for lbl in reversed(self.labels):
-                if predicate(lbl):
-                    display = formatter(lbl) if formatter else f"{lbl.text} @ {format_price(lbl.y)}"
-                    events[key] = {
-                        "text": lbl.text,
-                        "price": lbl.y,
-                        "display": display,
-                        "time": lbl.x,
-                        "time_display": format_timestamp(lbl.x),
-                    }
-                    break
-
-        def record_box(
-            key: str,
-            predicate: Callable[[Box], bool],
-            sources: Optional[Sequence[Iterable[Box]]] = None,
-        ) -> None:
-            iterables = sources or (self.boxes,)
-            for source in iterables:
-                if isinstance(source, PineArray):
-                    seq = list(source.values)
-                elif isinstance(source, list):
-                    seq = source
-                else:
-                    seq = list(source)
-                for bx in reversed(seq):
-                    if predicate(bx):
-                        events[key] = {
-                            "text": bx.text,
-                            "price": (bx.bottom, bx.top),
-                            "display": f"{bx.text} {format_price(bx.bottom)} → {format_price(bx.top)}",
-                            "time": bx.left,
-                            "time_display": format_timestamp(bx.left),
-                        }
-                        return
-
-        bull_color = self.inputs.structure.bull
-        bear_color = self.inputs.structure.bear
-
-        def _text_equals(label: Label, target: str, *, allow_hyphen: bool = False) -> bool:
-            text = label.text.strip()
-            if not allow_hyphen and "-" in text:
-                return False
-            if text == target:
-                return True
-            collapsed = text.replace(" ", "")
-            return collapsed == target.replace(" ", "")
-
-        record_label("BOS", lambda lbl: _text_equals(lbl, "BOS") or _text_equals(lbl, "B O S"))
-        record_label("BOS_PLUS", lambda lbl: _text_equals(lbl, "BOS+", allow_hyphen=True))
-        record_label("CHOCH", lambda lbl: _text_equals(lbl, self.CHOCH_TEXT))
-        record_label("MSS_PLUS", lambda lbl: _text_equals(lbl, "MSS+", allow_hyphen=True))
-        record_label("MSS", lambda lbl: _text_equals(lbl, "MSS") and "+" not in lbl.text)
-        record_label("IDM", lambda lbl: _text_equals(lbl, self.IDM_TEXT))
-        record_label(
-            "FUTURE_BOS",
-            lambda lbl: lbl.text.startswith(f"{self.BOS_TEXT} -"),
-            lambda lbl: lbl.text,
-        )
-        record_label(
-            "FUTURE_CHOCH",
-            lambda lbl: lbl.text.startswith(f"{self.CHOCH_TEXT} -"),
-            lambda lbl: lbl.text,
-        )
-        record_label("X", lambda lbl: lbl.text.strip() == "X")
-        record_label(
-            "RED_CIRCLE",
-            lambda lbl: lbl.style == "label.style_circle" and lbl.color == bear_color,
-            lambda lbl: f"هبوط @ {format_price(lbl.y)}",
-        )
-        record_label(
-            "GREEN_CIRCLE",
-            lambda lbl: lbl.style == "label.style_circle" and lbl.color == bull_color,
-            lambda lbl: f"صعود @ {format_price(lbl.y)}",
-        )
-
-        record_box("IDM_OB", lambda bx: bx.text == "IDM OB")
-        record_box("EXT_OB", lambda bx: bx.text == "EXT OB")
-        record_box(
-            "HIST_IDM_OB",
-            lambda bx: bx.text == "Hist IDM OB",
-            sources=(self.hist_idm_boxes, self.boxes),
-        )
-        record_box(
-            "HIST_EXT_OB",
-            lambda bx: bx.text == "Hist EXT OB",
-            sources=(self.hist_ext_boxes, self.boxes),
-        )
-        record_box("GOLDEN_ZONE", lambda bx: bx.text == "Golden zone")
-
-        return events
+        """Latest events are suppressed in this refactor."""
+        return {}
 
     def _sync_state_mirrors(self) -> None:
         """Mirror Pine ``var``/``array`` structures into dedicated containers."""
@@ -7157,204 +6999,6 @@ class SmartMoneyAlgoProE5:
         self._sync_state_mirrors()
 
 
-# ----------------------------------------------------------------------------
-# Binance scanner and report generation
-# ----------------------------------------------------------------------------
-
-
-def fetch_binance_usdtm_symbols(exchange: Any) -> List[str]:
-    """Enumerate ALL Binance USDT‑M perpetual pairs robustly.
-
-    محاور الاعتمادية:
-    1) نحاول طرق ccxt المتعددة: fapiPublicGetExchangeInfo / fapiPublicGetExchangeinfo / publicGetExchangeInfo.
-    2) نسقط إلى طلب HTTP مباشر لـ https://fapi.binance.com/fapi/v1/exchangeInfo إذا تعذّر (بيئات قديمة).
-    3) وأخيرًا نفلتر من load_markets() لضمان وجود قائمة حتى عند تعطل نقاط النهاية.
-    """
-    discovered: set[str] = set()
-
-    # حمّل الأسواق لبناء خريطة id -> unified symbol (إن توفرت)
-    try:
-        markets = exchange.load_markets()
-    except Exception:
-        markets = {}
-
-    id_to_symbol: Dict[str, str] = {}
-    if isinstance(markets, dict):
-        for sym, m in markets.items():
-            if isinstance(m, dict):
-                mid = m.get("id")
-                if mid:
-                    id_to_symbol[mid] = m.get("symbol", sym)
-
-    def add_from_exchange_info(data: Any) -> None:
-        """Parse Binance exchangeInfo JSON and add mapped symbols."""
-        try:
-            symbols_info = data.get("symbols", []) if isinstance(data, dict) else []
-        except Exception:
-            return
-        for e in symbols_info:
-            try:
-                if e.get("quoteAsset") != "USDT":
-                    continue
-                if (e.get("contractType") or "").upper() != "PERPETUAL":
-                    continue
-                status = (e.get("status") or "TRADING").upper()
-                if status not in {"TRADING", "BREAK"}:
-                    continue
-
-                sid = e.get("symbol")
-                base = e.get("baseAsset") or ""
-                # 1) استخدم الاسم الموحّد من ccxt عند توفره
-                if sid and sid in id_to_symbol:
-                    discovered.add(id_to_symbol[sid])
-                    continue
-
-                # 2) إن لم يوجد، جرّب المرشحين الموحّدين الشائعين
-                for candidate in (
-                    f"{base}/USDT:USDT",
-                    f"{base}/USDT",
-                    sid,
-                ):
-                    if candidate and candidate in markets:
-                        discovered.add(candidate)
-                        break
-                else:
-                    # 3) آخر حل: أضف BASE/USDT (ستعمل مع binanceusdm غالبًا)
-                    if base:
-                        discovered.add(f"{base}/USDT")
-            except Exception:
-                continue
-
-    # (1) جرّب مسارات ccxt المختلفة
-    for method_name in ("fapiPublicGetExchangeInfo", "fapiPublicGetExchangeinfo", "publicGetExchangeInfo"):
-        try:
-            method = getattr(exchange, method_name)
-        except Exception:
-            continue
-        try:
-            data = method()
-        except Exception:
-            continue
-        add_from_exchange_info(data)
-        if len(discovered) >= 10:
-            break
-
-    # (2) طلب HTTP مباشر إذا ظلت القائمة صغيرة
-    if len(discovered) < 10:
-        try:
-            import json, ssl
-            from urllib.request import urlopen, Request
-            req = Request("https://fapi.binance.com/fapi/v1/exchangeInfo", headers={"User-Agent": "python"})
-            with urlopen(req, timeout=10, context=ssl.create_default_context()) as resp:
-                data = resp.read()
-            data = json.loads(data.decode("utf-8"))
-            add_from_exchange_info(data)
-        except Exception:
-            pass
-
-
-    # (2.5) جرّب مُهيِّئ binance العادي مع defaultType=future (بعض نسخ ccxt تتعامل معه بشكل أوسع من binanceusdm)
-    if len(discovered) < 10:
-        try:
-            import ccxt as _ccxt
-            alt = _ccxt.binance({"enableRateLimit": True, "options": {"defaultType": "future"}})
-            alt_markets = alt.load_markets()
-            for sym, m in alt_markets.items():
-                if not isinstance(m, dict):
-                    continue
-                if m.get("quote") != "USDT":
-                    continue
-                if m.get("swap") is not True:
-                    continue
-                # linear فقط (USDT-M)
-                if m.get("linear") is not True:
-                    continue
-                discovered.add(m.get("symbol", sym))
-        except Exception:
-            pass
-
-    # (3) احتياطي أخير: فلترة من load_markets()
-    if len(discovered) < 10 and isinstance(markets, dict) and markets:
-        for sym, m in markets.items():
-            if not isinstance(m, dict):
-                continue
-            info = m.get("info", {}) if isinstance(m, dict) else {}
-            quote = m.get("quote") or info.get("quoteAsset")
-            settle = m.get("settle") or info.get("marginAsset")
-            if quote != "USDT":
-                continue
-            if settle and settle != "USDT":
-                continue
-            contract_type = (m.get("contractType") or info.get("contractType") or "").lower()
-            mtype = (m.get("type") or "").lower()
-            is_derivative = bool(m.get("contract")) or contract_type in {"perpetual", "current_quarter", "next_quarter"} or mtype in {"future", "swap"}
-            if not is_derivative:
-                continue
-            if contract_type and contract_type not in {"perpetual", ""}:
-                continue
-            if m.get("linear") is False and m.get("inverse") is True:
-                continue
-            discovered.add(sym)
-
-    if not discovered:
-        raise RuntimeError("تعذر الحصول على قائمة رموز USDT-M عبر ccxt وHTTP. تحقق من الشبكة/تحديث ccxt.")
-
-    return sorted(discovered)
-
-def fetch_ohlcv(exchange: Any, symbol: str, timeframe: str, limit: int) -> List[Dict[str, float]]:
-    """Fetch OHLCV data while preserving full history for structural parity.
-
-    Binance USDT-M returns at most 1500 candles per request.  TradingView keeps
-    indicator state across the entire available history, so requesting only the
-    latest ``limit`` bars leads to structural mismatches (missing legacy
-    pullbacks/ChoCh/OB states).  To replicate the indicator faithfully we walk
-    the history from the earliest candle and keep the trailing slice when the
-    caller specifies ``limit``.  Passing ``limit<=0`` fetches the entire
-    available history.
-    """
-
-    timeframe_seconds = _parse_timeframe_to_seconds(timeframe, None) or 60
-    timeframe_ms = timeframe_seconds * 1000
-    max_batch = 1500
-    since = 0
-    candles: List[Dict[str, float]] = []
-    target = limit if limit > 0 else None
-
-    while True:
-        request_limit = max_batch
-        if target is not None and target < max_batch and not candles:
-            # first batch can be trimmed if the caller only needs a small window
-            request_limit = target
-        raw: List[List[float]]
-        if since <= 0:
-            raw = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=request_limit, since=since)
-        else:
-            raw = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=request_limit, since=since)
-        if not raw:
-            break
-        for entry in raw:
-            candles.append(
-                {
-                    "time": entry[0],
-                    "open": entry[1],
-                    "high": entry[2],
-                    "low": entry[3],
-                    "close": entry[4],
-                    "volume": entry[5],
-                }
-            )
-        if target is not None and len(candles) > target:
-            candles = candles[-target:]
-        last_open = raw[-1][0]
-        next_since = last_open + timeframe_ms
-        if len(raw) < request_limit:
-            break
-        if next_since <= since:
-            next_since = since + timeframe_ms
-        since = next_since
-    return candles
-
-
 def _split_arguments(argument_string: str) -> List[str]:
     parts: List[str] = []
     current: List[str] = []
@@ -7965,7 +7609,6 @@ def generate_pullback_report(
 def render_report(
     runtime: SmartMoneyAlgoProE5,
     outfile: Path,
-    scanner_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     now = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
     pullback_section = textwrap.dedent(
@@ -8086,27 +7729,6 @@ def render_report(
 
     full_settings_section = "## الإعدادات الكاملة\n" + "\n".join(full_settings_lines)
 
-    scanner_section = ""
-    if scanner_rows:
-        rows = "\n".join(
-            f"| {row['symbol']} | {row['timeframe']} | {row.get('candles', '')} | "
-            f"{row.get('alerts', 0)} | {row.get('boxes', 0)} | "
-            f"{row.get('metrics', {}).get('demand_zones', 0)} | {row.get('metrics', {}).get('supply_zones', 0)} | "
-            f"{row.get('metrics', {}).get('bullish_fvg', 0)} | {row.get('metrics', {}).get('bearish_fvg', 0)} | "
-            f"{row.get('metrics', {}).get('order_flow_boxes', 0)} | {row.get('metrics', {}).get('scob_colored_bars', 0)} |"
-            for row in scanner_rows
-        )
-        scanner_section = textwrap.dedent(
-            f"""
-## ماسح Binance USDT-M
-
-| الرمز | الإطار الزمني | الشموع | التنبيهات | الصناديق | مناطق الطلب | مناطق العرض | FVG صاعدة | FVG هابطة | Order Flow | SCOB |
-|-------|---------------|--------|-----------|-----------|-------------|--------------|-----------|-----------|------------|------|
-{rows}
-
-"""
-        )
-
     content = textwrap.dedent(
         f"""
 # FINAL_REPORT_SMART_MONEY_ANALYSIS
@@ -8114,7 +7736,7 @@ def render_report(
 **المؤشر**: Smart Money Algo Pro E5 - CHADBULL
 **التاريخ**: {now}
 
-{scanner_section}## فهرس المحتويات
+## فهرس المحتويات
 1. [Pullback](#pullback)
 2. [Market Structure](#market-structure)
 3. [Order Block](#order-block)
@@ -8152,94 +7774,6 @@ def run_runtime_from_file(source: Path, outfile: Path, timeframe: str = "", bars
     render_report(runtime, outfile)
 
 
-METRIC_LABELS = [
-    ("alerts", "عدد التنبيهات"),
-    ("pullback_arrows", "إشارات Pullback"),
-    ("choch_labels", "علامات CHoCH"),
-    ("bos_labels", "علامات BOS"),
-    ("idm_labels", "علامات IDM"),
-    ("demand_zones", "مناطق الطلب"),
-    ("supply_zones", "مناطق العرض"),
-    ("bullish_fvg", "فجوات FVG صاعدة"),
-    ("bearish_fvg", "فجوات FVG هابطة"),
-    ("order_flow_boxes", "صناديق Order Flow"),
-    ("liquidity_objects", "مستويات السيولة"),
-    ("scob_colored_bars", "شموع SCOB"),
-]
-
-
-EVENT_DISPLAY_ORDER = [
-    ("BOS", "BOS"),
-    ("BOS_PLUS", "BOS+"),
-    ("CHOCH", "CHOCH"),
-    ("MSS_PLUS", "MSS+"),
-    ("MSS", "MSS"),
-    ("IDM", "IDM"),
-    ("IDM_OB", "IDM OB"),
-    ("EXT_OB", "EXT OB"),
-    ("HIST_IDM_OB", "Hist IDM OB"),
-    ("HIST_EXT_OB", "Hist EXT OB"),
-    ("GOLDEN_ZONE", "Golden zone"),
-    ("X", "X"),
-    ("RED_CIRCLE", "الدوائر الحمراء"),
-    ("GREEN_CIRCLE", "الدوائر الخضراء"),
-    ("FUTURE_BOS", "ليبل BOS المستقبلي"),
-    ("FUTURE_CHOCH", "ليبل CHOCH المستقبلي"),
-]
-
-
-def print_symbol_summary(index: int, symbol: str, timeframe: str, candle_count: int, metrics: Dict[str, Any]) -> None:
-    header_color = ANSI_HEADER_COLORS[index % len(ANSI_HEADER_COLORS)]
-    header_lines = [
-        f"{header_color}{ANSI_BOLD}════ تحليل {symbol} ({timeframe}) ════{ANSI_RESET}",
-        f"{ANSI_DIM}عدد الشموع: {candle_count}{ANSI_RESET}",
-    ]
-    price_value = metrics.get("current_price")
-    if isinstance(price_value, (int, float)):
-        price_value = float(price_value)
-        if not math.isnan(price_value):
-            header_lines.append(f"{ANSI_DIM}السعر الحالي: {format_price(price_value)}{ANSI_RESET}")
-    elif isinstance(price_value, str):
-        header_lines.append(f"{ANSI_DIM}السعر الحالي: {price_value}{ANSI_RESET}")
-    change_value = metrics.get("daily_change_percent")
-    if isinstance(change_value, (int, float)):
-        header_lines.append(
-            f"{ANSI_DIM}تغير 24 ساعة: {change_value:+.2f}%{ANSI_RESET}"
-        )
-    header = "\n".join(header_lines)
-    print(header, flush=True)
-    for key, label in METRIC_LABELS:
-        value = metrics.get(key, 0)
-        value_color = ANSI_VALUE_POS if value > 0 else ANSI_VALUE_ZERO
-        print(
-            f"  {ANSI_LABEL}{label:<26}{ANSI_RESET}: {value_color}{value}{ANSI_RESET}",
-            flush=True,
-        )
-    latest_events = metrics.get("latest_events") or {}
-    print(f"{ANSI_BOLD}أحدث الإشارات مع الأسعار{ANSI_RESET}", flush=True)
-    for key, label in EVENT_DISPLAY_ORDER:
-        event = latest_events.get(key)
-        if event:
-            display_text = event.get("display")
-            if display_text is None:
-                price = event.get("price")
-                if isinstance(price, tuple):
-                    display_text = " → ".join(format_price(p) for p in price)
-                else:
-                    display_text = format_price(price if isinstance(price, (int, float)) else None)
-            time_display = event.get("time_display") or format_timestamp(event.get("time"))
-            if time_display and time_display != "—":
-                display_text = f"{display_text} | {time_display}"
-            value_color = ANSI_VALUE_POS
-        else:
-            display_text = "—"
-            value_color = ANSI_VALUE_ZERO
-        print(
-            f"  {ANSI_LABEL}{label:<26}{ANSI_RESET}: {value_color}{display_text}{ANSI_RESET}",
-            flush=True,
-        )
-    print(f"{ANSI_DIM}{'-'*48}{ANSI_RESET}", flush=True)
-
 
 def print_trace_comparison(result: TraceComparisonResult) -> None:
     status = "مطابق" if result.matches else "اختلاف"
@@ -8260,114 +7794,13 @@ def print_trace_comparison(result: TraceComparisonResult) -> None:
             print(f"  - ... {extra} اختلافات إضافية", flush=True)
 
 
-def _extract_daily_change_percent(ticker: Dict[str, Any]) -> Optional[float]:
-    """Return the 24h percentage change if available."""
-
-    value = ticker.get("percentage") if isinstance(ticker, dict) else None
-    if value is None:
-        open_price = ticker.get("open") if isinstance(ticker, dict) else None
-        last_price = ticker.get("last") if isinstance(ticker, dict) else None
-        if open_price and last_price and open_price != 0:
-            value = ((float(last_price) - float(open_price)) / float(open_price)) * 100.0
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def scan_binance(
-    timeframe: str,
-    limit: int,
-    symbols: Optional[List[str]],
-    concurrency: int,
-    tracer: Optional[ExecutionTracer] = None,
-    *,
-    min_daily_change: float = 0.0,
-) -> Tuple[SmartMoneyAlgoProE5, List[Dict[str, Any]]]:
-    if ccxt is None:
-        raise RuntimeError("ccxt is not available")
-    exchange = ccxt.binanceusdm({"enableRateLimit": True})
-    all_symbols = symbols or fetch_binance_usdtm_symbols(exchange)
-    summaries: List[Dict[str, Any]] = []
-    primary_runtime: Optional[SmartMoneyAlgoProE5] = None
-    for idx, symbol in enumerate(all_symbols):
-        try:
-            ticker = exchange.fetch_ticker(symbol)
-        except Exception as exc:
-            print(f"تخطي {symbol} بسبب فشل fetch_ticker: {exc}", file=sys.stderr, flush=True)
-            continue
-        daily_change = _extract_daily_change_percent(ticker)
-        if min_daily_change > 0.0 and daily_change is not None and daily_change <= min_daily_change:
-            print(
-                f"تخطي {symbol} (تغير 24 ساعة {daily_change:.2f}% ≤ الحد الأدنى {min_daily_change:.2f}%)",
-                flush=True,
-            )
-            if tracer and tracer.enabled:
-                tracer.log(
-                    "scan",
-                    "symbol_skipped_daily_change",
-                    timestamp=None,
-                    symbol=symbol,
-                    change=daily_change,
-                    threshold=min_daily_change,
-                )
-            continue
-        candles = fetch_ohlcv(exchange, symbol, timeframe, limit)
-        runtime = SmartMoneyAlgoProE5(base_timeframe=timeframe, tracer=tracer)
-        runtime.process(candles)
-        metrics = runtime.gather_console_metrics()
-        metrics["daily_change_percent"] = daily_change
-        summaries.append(
-            {
-                "symbol": symbol,
-                "timeframe": timeframe,
-                "candles": len(candles),
-                "alerts": metrics.get("alerts", len(runtime.alerts)),
-                "boxes": metrics.get("boxes", len(runtime.boxes)),
-                "metrics": metrics,
-            }
-        )
-        print_symbol_summary(idx, symbol, timeframe, len(candles), metrics)
-        if tracer and tracer.enabled:
-            tracer.log(
-                "scan",
-                "symbol_complete",
-                timestamp=runtime.series.get_time(0),
-                symbol=symbol,
-                timeframe=timeframe,
-                candles=len(candles),
-            )
-        if primary_runtime is None:
-            primary_runtime = runtime
-    if primary_runtime is None:
-        primary_runtime = SmartMoneyAlgoProE5(tracer=tracer)
-        primary_runtime.process([])
-    return primary_runtime, summaries
-
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Smart Money Algo Pro E5 Python port")
     parser.add_argument("--data", type=Path, help="JSON file with OHLCV candles", required=False)
     parser.add_argument("--outfile", type=Path, default=Path("FINAL_REPORT_SMART_MONEY_ANALYSIS.md"))
-    parser.add_argument("--timeframe", type=str, default="1h", help="Timeframe used when scanning Binance")
-    parser.add_argument("--analysis-timeframe", type=str, default="", help="Override base timeframe when using --data or --no-scan")
-    parser.add_argument(
-        "--lookback",
-        type=int,
-        default=0,
-        help="Number of candles to request per symbol when scanning (0 = full history)",
-    )
+    parser.add_argument("--analysis-timeframe", type=str, default="", help="Override base timeframe when analysing data")
     parser.add_argument("--bars", type=int, default=0, help="Limit number of candles to analyse from --data source")
-    parser.add_argument("--symbols", type=str, default="")
-    parser.add_argument("--concurrency", type=int, default=3)
-    parser.add_argument(
-        "--min-daily-change",
-        type=float,
-        default=1.0,
-        help="الحد الأدنى لتغير 24 ساعة (٪) لاختيار الرمز عند مسح Binance، 0 لتعطيل الفلتر",
-    )
     parser.add_argument(
         "--pullback-report",
         action="store_true",
@@ -8379,13 +7812,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=Path("Smart Money Algo Pro E5 - CHADBULL.txt"),
         help="مسار ملف Pine الأصلي لاستخراج منطق Pullback",
     )
-    parser.add_argument("--no-scan", action="store_true")
     parser.add_argument("--trace", action="store_true", help="Enable execution tracing")
     parser.add_argument("--trace-file", type=Path, help="Write execution trace to JSON file")
     parser.add_argument("--compare-trace", type=Path, help="قارن التتبع الحالي بملف JSON مرجعي")
     args = parser.parse_args(argv)
-    if args.min_daily_change < 0.0:
-        parser.error("--min-daily-change يجب أن يكون رقمًا غير سالب")
 
     start = time.time()
 
@@ -8399,12 +7829,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             result = tracer.compare(args.compare_trace)
             print_trace_comparison(result)
 
+    base_timeframe = args.analysis_timeframe or None
+
     if args.pullback_report:
         log("Foundation")
         pine_text = args.pine_source.read_text(encoding="utf-8")
         python_text = Path(__file__).read_text(encoding="utf-8")
         log("Inventory")
-        runtime = SmartMoneyAlgoProE5(base_timeframe=args.analysis_timeframe or None, tracer=tracer)
+        runtime = SmartMoneyAlgoProE5(base_timeframe=base_timeframe, tracer=tracer)
         log("Timeline")
         runtime.process([])
         log("Rendering")
@@ -8415,58 +7847,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         tracer.emit()
         return 0
 
+    log("Foundation")
+    candles: List[Dict[str, Any]] = []
     if args.data:
-        log("Foundation")
-        candles = json.loads(args.data.read_text())
+        raw_text = args.data.read_text(encoding="utf-8")
+        candles = json.loads(raw_text)
         if args.bars > 0:
             candles = candles[-args.bars :]
-        log("Inventory")
-        runtime = SmartMoneyAlgoProE5(base_timeframe=args.analysis_timeframe or None, tracer=tracer)
-        log("Timeline")
-        runtime.process(candles)
-        perform_comparison()
-        log("Rendering")
-        render_report(runtime, args.outfile)
-        log("Coverage")
-        tracer.emit()
-        return 0
-
-    if args.no_scan:
-        log("Foundation")
-        log("Inventory")
-        runtime = SmartMoneyAlgoProE5(base_timeframe=args.analysis_timeframe or None, tracer=tracer)
-        log("Timeline")
-        runtime.process([])
-        perform_comparison()
-        log("Rendering")
-        render_report(runtime, args.outfile)
-        log("Coverage")
-        tracer.emit()
-        return 0
-
-    log("Foundation")
-    symbols = [s.strip() for s in args.symbols.split(",") if s.strip()] or None
     log("Inventory")
+    runtime = SmartMoneyAlgoProE5(base_timeframe=base_timeframe, tracer=tracer)
     log("Timeline")
-    runtime, summaries = scan_binance(
-        args.timeframe,
-        args.lookback,
-        symbols,
-        args.concurrency,
-        tracer,
-        min_daily_change=args.min_daily_change,
-    )
+    runtime.process(candles)
     perform_comparison()
     log("Rendering")
-    render_report(runtime, args.outfile, summaries)
+    render_report(runtime, args.outfile)
     elapsed = time.time() - start
     log(f"Coverage ({elapsed:.2f}s)")
     tracer.emit()
     return 0
 
 if __name__ == "__main__":
-    import sys
-    # إن فتحت السكربت من المحرر بدون بارامترات: افحص كل الأزواج افتراضيًا
-    if not sys.argv[1:]:
-        sys.argv += ["--timeframe","1h","--lookback","500","--min-daily-change","100"]
     main()
