@@ -258,6 +258,8 @@ def detect_ob(
         )
         sign = 1 if "↑" in label["text"] else -1
         for idx in range(max(0, candle_index - lookback), candle_index):
+            if _time_of(candles[idx]) < gate_ts:
+                continue
             bullish = candles[idx]["close"] > candles[idx]["open"]
             if (sign == 1 and not bullish) or (sign == -1 and bullish):
                 bottom = min(candles[idx]["open"], candles[idx]["close"])
@@ -293,36 +295,38 @@ def detect_golden_zone(
             start_candidates = [idx for idx in lows if idx < last_high_index]
             if start_candidates:
                 start_index = start_candidates[-1]
-                swing_low = candles[start_index]["low"]
-                swing_high = candles[last_high_index]["high"]
-                gz_min = swing_high - 0.786 * (swing_high - swing_low)
-                gz_max = swing_high - 0.618 * (swing_high - swing_low)
-                boxes.append(
-                    {
-                        "left": _time_of(candles[start_index]),
-                        "right": last_high_time,
-                        "bottom": gz_min,
-                        "top": gz_max,
-                        "text": "GoldenZone↑",
-                    }
-                )
+                if _time_of(candles[start_index]) >= gate_ts:
+                    swing_low = candles[start_index]["low"]
+                    swing_high = candles[last_high_index]["high"]
+                    gz_min = swing_high - 0.786 * (swing_high - swing_low)
+                    gz_max = swing_high - 0.618 * (swing_high - swing_low)
+                    boxes.append(
+                        {
+                            "left": _time_of(candles[start_index]),
+                            "right": last_high_time,
+                            "bottom": gz_min,
+                            "top": gz_max,
+                            "text": "GoldenZone↑",
+                        }
+                    )
         else:
             start_candidates = [idx for idx in highs if idx < last_low_index]
             if start_candidates:
                 start_index = start_candidates[-1]
-                swing_high = candles[start_index]["high"]
-                swing_low = candles[last_low_index]["low"]
-                gz_min = swing_low + 0.618 * (swing_high - swing_low)
-                gz_max = swing_low + 0.786 * (swing_high - swing_low)
-                boxes.append(
-                    {
-                        "left": _time_of(candles[start_index]),
-                        "right": last_low_time,
-                        "bottom": gz_min,
-                        "top": gz_max,
-                        "text": "GoldenZone↓",
-                    }
-                )
+                if _time_of(candles[start_index]) >= gate_ts:
+                    swing_high = candles[start_index]["high"]
+                    swing_low = candles[last_low_index]["low"]
+                    gz_min = swing_low + 0.618 * (swing_high - swing_low)
+                    gz_max = swing_low + 0.786 * (swing_high - swing_low)
+                    boxes.append(
+                        {
+                            "left": _time_of(candles[start_index]),
+                            "right": last_low_time,
+                            "bottom": gz_min,
+                            "top": gz_max,
+                            "text": "GoldenZone↓",
+                        }
+                    )
     return boxes
 
 
@@ -358,7 +362,8 @@ def scan_symbols(
                     [
                         box
                         for box in parsed.get("boxes", [])
-                        if int(box.get("left", 0)) >= gate_ts or int(box.get("right", 0)) >= gate_ts
+                        if int(box.get("left", 0)) >= gate_ts
+                        and int(box.get("right", 0)) >= gate_ts
                     ]
                 )
             highs, lows = pivots(candles, lookback=1)
