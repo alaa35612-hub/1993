@@ -1295,7 +1295,6 @@ class SmartMoneyAlgoProE5:
         self.boxes: List[Box] = []
         self.alerts: List[Tuple[int, str]] = []
         self.bar_colors: List[Tuple[int, str]] = []
-        self.console_event_log: Dict[str, Dict[str, Any]] = {}
 
         # Mirrors for Pine ``var``/``array`` state ---------------------------
         self.pullback_state = PullbackStateMirror()
@@ -1506,7 +1505,6 @@ class SmartMoneyAlgoProE5:
             "scob_colored_bars": len(self.bar_colors),
         }
         metrics["current_price"] = self.series.get("close")
-        metrics["latest_events"] = self._collect_latest_console_events()
         return metrics
 
     def _register_label_event(self, label: Label) -> None:
@@ -1517,28 +1515,9 @@ class SmartMoneyAlgoProE5:
         """Console event aggregation is disabled."""
         return
 
-    def _box_event_key(self, text: str) -> Optional[str]:
-        text = text.strip()
-        if text == "IDM OB":
-            return "IDM_OB"
-        if text == "EXT OB":
-            return "EXT_OB"
-        if text == "Hist IDM OB":
-            return "HIST_IDM_OB"
-        if text == "Hist EXT OB":
-            return "HIST_EXT_OB"
-        if text == "Golden zone":
-            return "GOLDEN_ZONE"
-        return None
-
     def box_delete(self, box: Optional[Box]) -> None:
         if not isinstance(box, Box):
             return
-        key = self._box_event_key(box.text)
-        if key and key in self.console_event_log:
-            entry = self.console_event_log[key]
-            if entry.get("time") == box.left:
-                del self.console_event_log[key]
         if box in self.boxes:
             self.boxes.remove(box)
         if box.command_id > 0:
@@ -1555,10 +1534,6 @@ class SmartMoneyAlgoProE5:
             left=box.left,
             right=box.right,
         )
-
-    def _collect_latest_console_events(self) -> Dict[str, Dict[str, Any]]:
-        """Latest events are suppressed in this refactor."""
-        return {}
 
     def _sync_state_mirrors(self) -> None:
         """Mirror Pine ``var``/``array`` structures into dedicated containers."""
